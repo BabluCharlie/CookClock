@@ -2,7 +2,6 @@ import streamlit as st
 from datetime import datetime, date, time as dt_time
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
-import threading
 
 # ==========================
 # CONFIGURATION
@@ -29,7 +28,7 @@ TASK_COLORS = {
     "Upcoming": "#d35400"
 }
 
-# Initialize active tasks
+# Initialize session state
 if "active_tasks" not in st.session_state:
     st.session_state.active_tasks = {}
 
@@ -43,7 +42,7 @@ def format_time(seconds):
 
 
 def play_web_alarm():
-    """Play audio alert in Streamlit (mobile and desktop compatible)"""
+    """Play audio alert in Streamlit (mobile & desktop)"""
     audio_file = Path("alarm.wav")
     if audio_file.exists():
         st.audio(str(audio_file), format="audio/wav")
@@ -51,21 +50,18 @@ def play_web_alarm():
 
 
 def trigger_alarm(task_name):
-    threading.Thread(target=play_web_alarm).start()
+    play_web_alarm()
     st.toast(f"Task '{task_name}' completed!")
 
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
-    placeholder = st.empty()
-    color = TASK_COLORS.get(task_type, TASK_COLORS["Custom"])
     pause_key = f"pause_{key}"
+    placeholder = st.empty()
 
-    # Initialize pause key
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
 
-    # Determine initial status
     status = "Scheduled" if scheduled_datetime and scheduled_datetime > datetime.now() else "Running"
 
     st.session_state.active_tasks[key] = {
@@ -73,29 +69,47 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
         "duration": duration,
         "remaining": duration,
         "status": status,
-        "placeholder": placeholder,
-        "color": color,
+        "color": TASK_COLORS.get(task_type, TASK_COLORS["Custom"]),
         "pause_key": pause_key,
         "scheduled_datetime": scheduled_datetime,
-        "alarm_played": False
+        "alarm_played": False,
+        "placeholder": placeholder
     }
 
-    # Immediately display task
-    display_task(st.session_state.active_tasks[key], key)
+
+def update_tasks():
+    now = datetime.now()
+    for key, task in list(st.session_state.active_tasks.items()):
+        # Activate scheduled tasks
+        if task["status"] == "Scheduled" and task.get("scheduled_datetime") and task["scheduled_datetime"] <= now:
+            task["status"] = "Running"
+
+        # Countdown if running and not paused
+        if task["status"] == "Running" and not st.session_state.get(task["pause_key"], False):
+            task["remaining"] -= 1
+            if task["remaining"] <= 0:
+                task["remaining"] = 0
+                task["status"] = "Done"
+                if not task["alarm_played"]:
+                    trigger_alarm(task["name"])
+                    task["alarm_played"] = True
+
+        # Auto-remove done tasks after delay
+        if task["status"] == "Done":
+            task["remaining"] = 0
 
 
-def display_task(task, key):
-    pause_key = task.get("pause_key")
+def display_task(task):
+    pause_key = task["pause_key"]
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
-    task["paused"] = st.session_state[pause_key]
 
-    now = datetime.now()
-    sched_str = task["scheduled_datetime"].strftime("%Y-%m-%d %H:%M") if task.get("scheduled_datetime") else ""
+    task["paused"] = st.session_state[pause_key]
     status = task["status"]
     color = "#28a745" if status == "Done" else task["color"]
-    percent = int((task["remaining"] / task["duration"]) * 100) if status == "Running" and task["duration"] > 0 else 0
+    percent = int((task["remaining"] / task["duration"]) * 100) if task["duration"] > 0 else 0
     remaining_str = format_time(task["remaining"]) if status != "Scheduled" else "--:--"
+    sched_str = task["scheduled_datetime"].strftime("%Y-%m-%d %H:%M") if task.get("scheduled_datetime") else ""
 
     with task["placeholder"]:
         st.markdown(f"""
@@ -111,34 +125,7 @@ def display_task(task, key):
             <p style='margin:10px 0; font-size:20px; font-weight:bold;'>Status: {status}</p>
         </div>
         """, unsafe_allow_html=True)
-        # Pause/Resume checkbox
         st.checkbox("Pause/Resume", key=pause_key)
-
-
-def update_tasks():
-    now = datetime.now()
-    for key, task in list(st.session_state.active_tasks.items()):
-        # Activate scheduled tasks
-        if task["status"] == "Scheduled" and task.get("scheduled_datetime") and task["scheduled_datetime"] <= now:
-            task["status"] = "Running"
-
-        # Countdown for running tasks
-        if task["status"] == "Running" and not task.get("paused", False):
-            task["remaining"] -= 1
-            if task["remaining"] <= 0:
-                task["status"] = "Done"
-                task["remaining"] = 0
-                if not task.get("alarm_played", False):
-                    trigger_alarm(task["name"])
-                    task["alarm_played"] = True
-
-                # Auto-remove done task after delay
-                def remove_task(k=key):
-                    if k in st.session_state.active_tasks:
-                        st.session_state.active_tasks.pop(k)
-
-                threading.Timer(AUTO_CLEAR_SECONDS, remove_task).start()
-        display_task(task, key)
 
 
 # ==========================
@@ -155,9 +142,7 @@ for i, (task_name, duration) in enumerate(predefined_tasks.items()):
         if st.button(f"Start {task_name}", key=f"start_{task_name}"):
             start_task(task_name, duration, task_type=task_name)
 
-st.markdown("---")
-
-# Custom Task - immediate start
+# Custom Task Form
 st.subheader("✨ Add Custom Task (Immediate)")
 with st.form("custom_task_form"):
     custom_name = st.text_input("Task Name")
@@ -168,9 +153,7 @@ with st.form("custom_task_form"):
         duration = int(custom_min) * 60 + int(custom_sec)
         start_task(custom_name, duration, task_type="Custom")
 
-st.markdown("---")
-
-# Scheduled Custom Task
+# Scheduled Task Form
 st.subheader("⏰ Schedule Task for Future")
 with st.form("scheduled_task_form"):
     sched_name = st.text_input("Task Name (Scheduled)")
@@ -186,15 +169,10 @@ with st.form("scheduled_task_form"):
 
 st.markdown("---")
 
-# Upcoming Tasks Section
-st.subheader("📅 Upcoming Tasks")
-for key, task in st.session_state.active_tasks.items():
-    if task["status"] == "Scheduled":
-        task["color"] = TASK_COLORS["Upcoming"]
-        display_task(task, key)
-
-# ==========================
-# AUTO-REFRESH & MAIN LOOP
-# ==========================
-st_autorefresh(interval=1000, limit=None, key="refresh")
+# Update and display all tasks
 update_tasks()
+for task in st.session_state.active_tasks.values():
+    display_task(task)
+
+# Auto-refresh every second
+st_autorefresh(interval=1000, limit=None, key="refresh")
