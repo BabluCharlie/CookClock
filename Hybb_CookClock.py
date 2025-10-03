@@ -95,20 +95,23 @@ def display_task(task, key):
     percent = int((task["remaining"] / task["duration"]) * 100) if status == "Running" and task["duration"] > 0 else 0
     remaining_str = format_time(task["remaining"]) if status != "Scheduled" else "--:--"
 
-    task_html = f"""
-    <div style='border:2px solid {color}; padding:20px; margin-bottom:15px; border-radius:15px;
-                background-color:#fef9f4; box-shadow: 4px 4px 12px #ccc;' >
-        <h1 style='margin:0; color:{color}; font-family:"Impact","Arial Black",sans-serif;
-                   font-weight:bold; font-size:48px; text-shadow: 2px 2px #ddd;'>{task['name']}</h1>
-        <p style='margin:5px 0; font-size:20px; font-weight:bold;'>Scheduled: {sched_str}</p>
-        <p style='margin:10px 0; font-size:24px; font-weight:bold;'>Remaining: {remaining_str}</p>
-        <div style='background-color:#eee; border-radius:12px; overflow:hidden; height:25px;' >
-            <div style='width:{percent}%; background-color:{color}; height:25px; transition: width 1s;'></div>
+    # Display task and checkbox in the same placeholder
+    with task["placeholder"]:
+        st.markdown(f"""
+        <div style='border:2px solid {color}; padding:20px; margin-bottom:15px; border-radius:15px;
+                    background-color:#fef9f4; box-shadow: 4px 4px 12px #ccc;' >
+            <h1 style='margin:0; color:{color}; font-family:"Impact","Arial Black",sans-serif;
+                       font-weight:bold; font-size:48px; text-shadow: 2px 2px #ddd;'>{task['name']}</h1>
+            <p style='margin:5px 0; font-size:20px; font-weight:bold;'>Scheduled: {sched_str}</p>
+            <p style='margin:10px 0; font-size:24px; font-weight:bold;'>Remaining: {remaining_str}</p>
+            <div style='background-color:#eee; border-radius:12px; overflow:hidden; height:25px;' >
+                <div style='width:{percent}%; background-color:{color}; height:25px; transition: width 1s;'></div>
+            </div>
+            <p style='margin:10px 0; font-size:20px; font-weight:bold;'>Status: {status}</p>
         </div>
-        <p style='margin:10px 0; font-size:20px; font-weight:bold;'>Status: {status}</p>
-    </div>
-    """
-    task["placeholder"].markdown(task_html, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        # Pause/Resume checkbox
+        st.checkbox("Pause/Resume", key=pause_key)
 
 
 def update_tasks():
@@ -150,8 +153,6 @@ for i, (task_name, duration) in enumerate(predefined_tasks.items()):
     with cols[i]:
         if st.button(f"Start {task_name}", key=f"start_{task_name}"):
             start_task(task_name, duration, task_type=task_name)
-            pause_key = f"pause_{task_name}_{len(st.session_state.active_tasks) - 1}"
-            st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
 
@@ -165,8 +166,6 @@ with st.form("custom_task_form"):
     if submitted:
         duration = int(custom_min) * 60 + int(custom_sec)
         start_task(custom_name, duration, task_type="Custom")
-        pause_key = f"pause_{custom_name}_{len(st.session_state.active_tasks) - 1}"
-        st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
 
@@ -183,8 +182,6 @@ with st.form("scheduled_task_form"):
         duration = int(sched_min) * 60 + int(sched_sec)
         scheduled_datetime = datetime.combine(sched_date, sched_time)
         start_task(sched_name, duration, task_type="Scheduled", scheduled_datetime=scheduled_datetime)
-        pause_key = f"pause_{sched_name}_{len(st.session_state.active_tasks) - 1}"
-        st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
 
