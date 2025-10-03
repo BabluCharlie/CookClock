@@ -1,15 +1,14 @@
 import streamlit as st
-import time
-import threading
 from datetime import datetime, date, time as dt_time
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
+import threading
 
 # ==========================
 # CONFIGURATION
 # ==========================
 st.set_page_config(page_title="HYBB CookClock", layout="wide")
-AUTO_CLEAR_SECONDS = 15  # Auto-remove done tasks
+AUTO_CLEAR_SECONDS = 15  # auto-remove done tasks
 
 # Predefined tasks (seconds)
 predefined_tasks = {
@@ -30,9 +29,10 @@ TASK_COLORS = {
     "Upcoming": "#d35400"
 }
 
-# Store active tasks
+# Initialize active tasks
 if "active_tasks" not in st.session_state:
     st.session_state.active_tasks = {}
+
 
 # ==========================
 # HELPER FUNCTIONS
@@ -41,25 +41,27 @@ def format_time(seconds):
     mins, secs = divmod(int(seconds), 60)
     return f"{mins:02d}:{secs:02d}"
 
+
 def play_web_alarm():
-    """Play browser beep or show toast"""
+    """Play audio alert in Streamlit (mobile and desktop compatible)"""
     audio_file = Path("alarm.wav")
     if audio_file.exists():
-        audio_bytes = audio_file.read_bytes()
-        st.audio(audio_bytes, format="audio/wav")
-    else:
-        st.toast("🔔 Task completed!")
+        st.audio(str(audio_file), format="audio/wav")
+    st.toast("🔔 Task completed!")
+
 
 def trigger_alarm(task_name):
     threading.Thread(target=play_web_alarm).start()
     st.toast(f"Task '{task_name}' completed!")
 
+
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
     placeholder = st.empty()
     color = TASK_COLORS.get(task_type, TASK_COLORS["Custom"])
-
     pause_key = f"pause_{key}"
+
+    # Initialize pause key
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
 
@@ -78,7 +80,14 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
         "alarm_played": False
     }
 
+
 def display_task(task, key):
+    # Safe initialization of pause key
+    pause_key = task.get("pause_key")
+    if pause_key not in st.session_state:
+        st.session_state[pause_key] = False
+    task["paused"] = st.session_state[pause_key]
+
     now = datetime.now()
     sched_str = task["scheduled_datetime"].strftime("%Y-%m-%d %H:%M") if task.get("scheduled_datetime") else ""
     status = task["status"]
@@ -100,7 +109,7 @@ def display_task(task, key):
     </div>
     """
     task["placeholder"].markdown(task_html, unsafe_allow_html=True)
-    task["paused"] = st.session_state[task["pause_key"]]
+
 
 def update_tasks():
     now = datetime.now()
@@ -118,11 +127,15 @@ def update_tasks():
                 if not task.get("alarm_played", False):
                     trigger_alarm(task["name"])
                     task["alarm_played"] = True
-                # Auto-clear after delay
+
+                # Auto-remove done task after delay
                 def remove_task(k=key):
-                    st.session_state.active_tasks.pop(k, None)
+                    if k in st.session_state.active_tasks:
+                        st.session_state.active_tasks.pop(k)
+
                 threading.Timer(AUTO_CLEAR_SECONDS, remove_task).start()
         display_task(task, key)
+
 
 # ==========================
 # UI LAYOUT
@@ -137,7 +150,7 @@ for i, (task_name, duration) in enumerate(predefined_tasks.items()):
     with cols[i]:
         if st.button(f"Start {task_name}", key=f"start_{task_name}"):
             start_task(task_name, duration, task_type=task_name)
-            pause_key = f"pause_{task_name}_{len(st.session_state.active_tasks)-1}"
+            pause_key = f"pause_{task_name}_{len(st.session_state.active_tasks) - 1}"
             st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
@@ -152,7 +165,7 @@ with st.form("custom_task_form"):
     if submitted:
         duration = int(custom_min) * 60 + int(custom_sec)
         start_task(custom_name, duration, task_type="Custom")
-        pause_key = f"pause_{custom_name}_{len(st.session_state.active_tasks)-1}"
+        pause_key = f"pause_{custom_name}_{len(st.session_state.active_tasks) - 1}"
         st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
@@ -167,10 +180,10 @@ with st.form("scheduled_task_form"):
     sched_sec = st.number_input("Seconds", min_value=0, value=30, key="sched_sec")
     submitted_sched = st.form_submit_button("Schedule Task")
     if submitted_sched:
-        duration = int(sched_min)*60 + int(sched_sec)
+        duration = int(sched_min) * 60 + int(sched_sec)
         scheduled_datetime = datetime.combine(sched_date, sched_time)
         start_task(sched_name, duration, task_type="Scheduled", scheduled_datetime=scheduled_datetime)
-        pause_key = f"pause_{sched_name}_{len(st.session_state.active_tasks)-1}"
+        pause_key = f"pause_{sched_name}_{len(st.session_state.active_tasks) - 1}"
         st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
@@ -185,5 +198,5 @@ for key, task in st.session_state.active_tasks.items():
 # ==========================
 # AUTO-REFRESH & MAIN LOOP
 # ==========================
-st_autorefresh(interval=1000, limit=None, key="refresh")  # refresh every 1 second
+st_autorefresh(interval=1000, limit=None, key="refresh")
 update_tasks()
