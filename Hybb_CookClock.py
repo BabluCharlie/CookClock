@@ -2,8 +2,8 @@ import streamlit as st
 import time
 import threading
 from datetime import datetime, date, time as dt_time
-import winsound  # for local alarm
-from plyer import notification  # for desktop notification
+from pathlib import Path
+from streamlit_autorefresh import st_autorefresh
 
 # ==========================
 # CONFIGURATION
@@ -41,14 +41,18 @@ def format_time(seconds):
     mins, secs = divmod(int(seconds), 60)
     return f"{mins:02d}:{secs:02d}"
 
+def play_web_alarm():
+    """Play browser beep or show toast"""
+    audio_file = Path("alarm.wav")
+    if audio_file.exists():
+        audio_bytes = audio_file.read_bytes()
+        st.audio(audio_bytes, format="audio/wav")
+    else:
+        st.toast("🔔 Task completed!")
+
 def trigger_alarm(task_name):
-    """Play sound + show desktop notification"""
-    threading.Thread(target=lambda: winsound.Beep(1000, 1500)).start()
-    notification.notify(
-        title="HYBB CookClock",
-        message=f"Task '{task_name}' completed!",
-        timeout=5
-    )
+    threading.Thread(target=play_web_alarm).start()
+    st.toast(f"Task '{task_name}' completed!")
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
@@ -96,8 +100,6 @@ def display_task(task, key):
     </div>
     """
     task["placeholder"].markdown(task_html, unsafe_allow_html=True)
-
-    # Pause/Resume checkbox
     task["paused"] = st.session_state[task["pause_key"]]
 
 def update_tasks():
@@ -116,7 +118,10 @@ def update_tasks():
                 if not task.get("alarm_played", False):
                     trigger_alarm(task["name"])
                     task["alarm_played"] = True
-                threading.Timer(AUTO_CLEAR_SECONDS, lambda k=key: st.session_state.active_tasks.pop(k, None)).start()
+                # Auto-clear after delay
+                def remove_task(k=key):
+                    st.session_state.active_tasks.pop(k, None)
+                threading.Timer(AUTO_CLEAR_SECONDS, remove_task).start()
         display_task(task, key)
 
 # ==========================
@@ -178,8 +183,7 @@ for key, task in st.session_state.active_tasks.items():
         display_task(task, key)
 
 # ==========================
-# MAIN LOOP
+# AUTO-REFRESH & MAIN LOOP
 # ==========================
-while st.session_state.active_tasks:
-    update_tasks()
-    time.sleep(1)
+st_autorefresh(interval=1000, limit=None, key="refresh")  # refresh every 1 second
+update_tasks()
