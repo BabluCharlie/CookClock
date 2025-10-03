@@ -37,7 +37,6 @@ if "active_tasks" not in st.session_state:
 # ==========================
 # AUTO REFRESH
 # ==========================
-# Refresh page every 1 second to update timers
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
@@ -49,16 +48,15 @@ def format_time(seconds):
 
 def trigger_alarm(task_name):
     """Play default beep sound for task completion"""
-    beep_file = Path("beep.wav")  # Default beep included in project folder
+    beep_file = Path("beep.wav")
     if beep_file.exists():
-        st.audio(str(beep_file), format="audio/wav")
+        st.audio(str(beep_file), format="audio/wav", start_time=0)
     st.toast(f"Task '{task_name}' completed!")
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
     placeholder = st.empty()
     color = TASK_COLORS.get(task_type, TASK_COLORS["Custom"])
-
     pause_key = f"pause_{key}"
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
@@ -98,11 +96,13 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # Pause checkbox (unique key per task)
-    if task["pause_key"] not in st.session_state:
-        st.session_state[task["pause_key"]] = False
-
-    task["paused"] = st.checkbox("Pause/Resume", key=task["pause_key"])
+    # Only show Pause/Resume checkbox for running tasks
+    if status == "Running":
+        if task["pause_key"] not in st.session_state:
+            st.session_state[task["pause_key"]] = False
+        task["paused"] = st.checkbox("Pause/Resume", key=task["pause_key"])
+    else:
+        task["paused"] = False
 
 def update_tasks():
     now = datetime.now()
