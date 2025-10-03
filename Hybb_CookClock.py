@@ -1,8 +1,9 @@
 import streamlit as st
 import time
-import threading
 from datetime import datetime, date, time as dt_time
-from pathlib import Path  # for audio
+from pathlib import Path
+from streamlit_autorefresh import st_autorefresh
+import threading
 
 # ==========================
 # CONFIGURATION
@@ -32,6 +33,12 @@ TASK_COLORS = {
 # Store active tasks
 if "active_tasks" not in st.session_state:
     st.session_state.active_tasks = {}
+
+# ==========================
+# AUTO REFRESH
+# ==========================
+# Refresh page every 1 second to update timers
+st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
 # HELPER FUNCTIONS
@@ -91,11 +98,12 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # Pause/Resume checkbox
+    # Render Pause checkbox only once per task
     if task["pause_key"] not in st.session_state:
         st.session_state[task["pause_key"]] = False
+        st.checkbox("Pause/Resume", key=task["pause_key"])
+
     task["paused"] = st.session_state[task["pause_key"]]
-    st.checkbox("Pause/Resume", key=task["pause_key"])
 
 def update_tasks():
     now = datetime.now()
@@ -126,8 +134,6 @@ for i, (task_name, duration) in enumerate(predefined_tasks.items()):
     with cols[i]:
         if st.button(f"Start {task_name}", key=f"start_{task_name}"):
             start_task(task_name, duration, task_type=task_name)
-            pause_key = f"pause_{task_name}_{len(st.session_state.active_tasks)-1}"
-            st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
 
@@ -141,8 +147,6 @@ with st.form("custom_task_form"):
     if submitted:
         duration = int(custom_min) * 60 + int(custom_sec)
         start_task(custom_name, duration, task_type="Custom")
-        pause_key = f"pause_{custom_name}_{len(st.session_state.active_tasks)-1}"
-        st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
 
@@ -159,8 +163,6 @@ with st.form("scheduled_task_form"):
         duration = int(sched_min)*60 + int(sched_sec)
         scheduled_datetime = datetime.combine(sched_date, sched_time)
         start_task(sched_name, duration, task_type="Scheduled", scheduled_datetime=scheduled_datetime)
-        pause_key = f"pause_{sched_name}_{len(st.session_state.active_tasks)-1}"
-        st.checkbox("Pause/Resume", key=pause_key)
 
 st.markdown("---")
 
@@ -172,10 +174,8 @@ for key, task in st.session_state.active_tasks.items():
         display_task(task, key)
 
 # ==========================
-# MAIN LOOP
+# Update all tasks once per refresh
 # ==========================
-while st.session_state.active_tasks:
-    update_tasks()
-    for key, task in st.session_state.active_tasks.items():
-        display_task(task, key)
-    time.sleep(1)
+update_tasks()
+for key, task in st.session_state.active_tasks.items():
+    display_task(task, key)
