@@ -48,10 +48,10 @@ def format_time(seconds):
     return f"{mins:02d}:{secs:02d}"
 
 def trigger_alarm(task_name):
-    """Play sound (web/mobile compatible)"""
-    audio_file = Path("alarm.wav")  # Place a short alarm.wav in the same folder
-    if audio_file.exists():
-        st.audio(str(audio_file), format="audio/wav")
+    """Play default beep sound for task completion"""
+    beep_file = Path("beep.wav")  # Default beep included in project folder
+    if beep_file.exists():
+        st.audio(str(beep_file), format="audio/wav")
     st.toast(f"Task '{task_name}' completed!")
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
@@ -98,12 +98,11 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # Render Pause checkbox only once per task
+    # Pause checkbox (unique key per task)
     if task["pause_key"] not in st.session_state:
         st.session_state[task["pause_key"]] = False
-        st.checkbox("Pause/Resume", key=task["pause_key"])
 
-    task["paused"] = st.session_state[task["pause_key"]]
+    task["paused"] = st.checkbox("Pause/Resume", key=task["pause_key"])
 
 def update_tasks():
     now = datetime.now()
