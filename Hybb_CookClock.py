@@ -4,6 +4,7 @@ from datetime import datetime, date, time as dt_time
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 import threading
+import base64
 
 # ==========================
 # CONFIGURATION
@@ -34,24 +35,26 @@ TASK_COLORS = {
 if "active_tasks" not in st.session_state:
     st.session_state.active_tasks = {}
 
-# ==========================
-# AUTO REFRESH
-# ==========================
+# Auto-refresh for timer updates
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# HELPER FUNCTIONS
+# Base64 default beep sound (~0.3 sec 440 Hz)
+# ==========================
+BEEP_BASE64 = "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA="
+
+def trigger_alarm(task_name):
+    """Play default beep sound (base64, no file needed)"""
+    beep_bytes = base64.b64decode(BEEP_BASE64)
+    st.audio(beep_bytes, format="audio/wav", start_time=0)
+    st.toast(f"Task '{task_name}' completed!")
+
+# ==========================
+# Helper functions
 # ==========================
 def format_time(seconds):
     mins, secs = divmod(int(seconds), 60)
     return f"{mins:02d}:{secs:02d}"
-
-def trigger_alarm(task_name):
-    """Play default beep sound for task completion"""
-    beep_file = Path("beep.wav")
-    if beep_file.exists():
-        st.audio(str(beep_file), format="audio/wav", start_time=0)
-    st.toast(f"Task '{task_name}' completed!")
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
@@ -96,7 +99,7 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # Only show Pause/Resume checkbox for running tasks
+    # Only show Pause/Resume checkbox for Running tasks
     if status == "Running":
         if task["pause_key"] not in st.session_state:
             st.session_state[task["pause_key"]] = False
@@ -107,9 +110,11 @@ def display_task(task, key):
 def update_tasks():
     now = datetime.now()
     for key, task in list(st.session_state.active_tasks.items()):
+        # Activate scheduled tasks
         if task["status"] == "Scheduled" and task.get("scheduled_datetime") and task["scheduled_datetime"] <= now:
             task["status"] = "Running"
 
+        # Countdown for running tasks
         if task["status"] == "Running" and not task.get("paused", False):
             task["remaining"] -= 1
             if task["remaining"] <= 0:
@@ -118,6 +123,7 @@ def update_tasks():
                 if not task.get("alarm_played", False):
                     trigger_alarm(task["name"])
                     task["alarm_played"] = True
+                # Auto-remove task after AUTO_CLEAR_SECONDS
                 threading.Timer(AUTO_CLEAR_SECONDS, lambda k=key: st.session_state.active_tasks.pop(k, None)).start()
 
 # ==========================
