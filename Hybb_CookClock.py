@@ -80,9 +80,11 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
         "alarm_played": False
     }
 
+    # Immediately display task
+    display_task(st.session_state.active_tasks[key], key)
+
 
 def display_task(task, key):
-    # Safe initialization of pause key
     pause_key = task.get("pause_key")
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
@@ -95,7 +97,6 @@ def display_task(task, key):
     percent = int((task["remaining"] / task["duration"]) * 100) if status == "Running" and task["duration"] > 0 else 0
     remaining_str = format_time(task["remaining"]) if status != "Scheduled" else "--:--"
 
-    # Display task and checkbox in the same placeholder
     with task["placeholder"]:
         st.markdown(f"""
         <div style='border:2px solid {color}; padding:20px; margin-bottom:15px; border-radius:15px;
