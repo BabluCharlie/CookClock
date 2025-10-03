@@ -1,7 +1,6 @@
 import streamlit as st
 import time
 from datetime import datetime, date, time as dt_time
-from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 import threading
 import base64
@@ -60,11 +59,11 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
     placeholder = st.empty()
     color = TASK_COLORS.get(task_type, TASK_COLORS["Custom"])
+
+    status = "Scheduled" if scheduled_datetime and scheduled_datetime > datetime.now() else "Running"
     pause_key = f"pause_{key}"
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
-
-    status = "Scheduled" if scheduled_datetime and scheduled_datetime > datetime.now() else "Running"
 
     st.session_state.active_tasks[key] = {
         "name": task_name,
@@ -99,11 +98,10 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # Only show Pause/Resume checkbox for Running tasks
+    # --- ONLY SHOW PAUSE/RESUME FOR RUNNING TASKS ---
     if status == "Running":
-        if task["pause_key"] not in st.session_state:
-            st.session_state[task["pause_key"]] = False
-        task["paused"] = st.checkbox("Pause/Resume", key=task["pause_key"])
+        pause_key = task["pause_key"]
+        task["paused"] = st.checkbox("Pause/Resume", key=pause_key)
     else:
         task["paused"] = False
 
