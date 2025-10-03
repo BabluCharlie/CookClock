@@ -57,11 +57,11 @@ def trigger_alarm(task_name):
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
     pause_key = f"pause_{key}"
-    placeholder = st.empty()
 
     if pause_key not in st.session_state:
         st.session_state[pause_key] = False
 
+    placeholder = st.empty()
     status = "Scheduled" if scheduled_datetime and scheduled_datetime > datetime.now() else "Running"
 
     st.session_state.active_tasks[key] = {
@@ -93,10 +93,6 @@ def update_tasks():
                 if not task["alarm_played"]:
                     trigger_alarm(task["name"])
                     task["alarm_played"] = True
-
-        # Auto-remove done tasks after delay
-        if task["status"] == "Done":
-            task["remaining"] = 0
 
 
 def display_task(task):
@@ -169,10 +165,29 @@ with st.form("scheduled_task_form"):
 
 st.markdown("---")
 
-# Update and display all tasks
+# ==========================
+# Display Running & Upcoming Tasks
+# ==========================
 update_tasks()
+
+running_tasks = []
+upcoming_tasks = []
+
 for task in st.session_state.active_tasks.values():
-    display_task(task)
+    if task["status"] == "Scheduled":
+        upcoming_tasks.append(task)
+    else:
+        running_tasks.append(task)
+
+if running_tasks:
+    st.subheader("🟢 Running Tasks")
+    for task in running_tasks:
+        display_task(task)
+
+if upcoming_tasks:
+    st.subheader("🟡 Upcoming Tasks")
+    for task in upcoming_tasks:
+        display_task(task)
 
 # Auto-refresh every second
 st_autorefresh(interval=1000, limit=None, key="refresh")
