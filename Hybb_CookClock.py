@@ -2,8 +2,7 @@ import streamlit as st
 import time
 import threading
 from datetime import datetime, date, time as dt_time
-from plyer import notification  # for desktop notification
-from pathlib import Path  # for web/mobile sound
+from pathlib import Path  # for audio
 
 # ==========================
 # CONFIGURATION
@@ -42,18 +41,11 @@ def format_time(seconds):
     return f"{mins:02d}:{secs:02d}"
 
 def trigger_alarm(task_name):
-    """Play sound + show desktop notification (web/mobile compatible)"""
+    """Play sound (web/mobile compatible)"""
     audio_file = Path("alarm.wav")  # Place a short alarm.wav in the same folder
     if audio_file.exists():
         st.audio(str(audio_file), format="audio/wav")
-    try:
-        notification.notify(
-            title="HYBB CookClock",
-            message=f"Task '{task_name}' completed!",
-            timeout=5
-        )
-    except:
-        pass
+    st.toast(f"Task '{task_name}' completed!")
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
@@ -79,7 +71,6 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
     }
 
 def display_task(task, key):
-    now = datetime.now()
     sched_str = task["scheduled_datetime"].strftime("%Y-%m-%d %H:%M") if task.get("scheduled_datetime") else ""
     status = task["status"]
     color = "#28a745" if status == "Done" else task["color"]
