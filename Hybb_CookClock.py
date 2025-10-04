@@ -155,6 +155,11 @@ def update_tasks():
 st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB CookClock 🥘🍚🍖</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
+# --- Test Beep Button for Mobile Interaction ---
+st.subheader("🔊 Test Beep (Tap if mobile sound not working)")
+if st.button("Test Beep"):
+    trigger_alarm("Test")
+
 # Predefined Tasks
 st.subheader("🔥 Predefined Tasks")
 cols = st.columns(len(predefined_tasks))
