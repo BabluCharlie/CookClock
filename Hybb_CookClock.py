@@ -3,7 +3,7 @@ import time
 from datetime import datetime, date, time as dt_time
 from streamlit_autorefresh import st_autorefresh
 import threading
-import base64
+import streamlit.components.v1 as components  # for JS beep
 
 # ==========================
 # CONFIGURATION
@@ -38,14 +38,21 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# Base64 default beep sound (~0.3 sec 440 Hz)
+# Reliable JS-based beep sound
 # ==========================
-BEEP_BASE64 = "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA="
-
 def trigger_alarm(task_name):
-    """Play default beep sound (base64, no file needed)"""
-    beep_bytes = base64.b64decode(BEEP_BASE64)
-    st.audio(beep_bytes, format="audio/wav", start_time=0)
+    """Play a short beep using JS for reliable immediate sound"""
+    components.html(f"""
+    <script>
+    var context = new (window.AudioContext || window.webkitAudioContext)();
+    var o = context.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(440, context.currentTime);
+    o.connect(context.destination);
+    o.start();
+    o.stop(context.currentTime + 0.3);
+    </script>
+    """, height=0)
     st.toast(f"Task '{task_name}' completed!")
 
 # ==========================
