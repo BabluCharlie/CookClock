@@ -3,7 +3,7 @@ import time
 from datetime import datetime, date, time as dt_time
 from streamlit_autorefresh import st_autorefresh
 import threading
-import streamlit.components.v1 as components  # for JS beep
+import streamlit.components.v1 as components
 import base64
 import os
 
@@ -49,7 +49,6 @@ if os.path.exists(BEEP_FILE):
         beep_base64 = base64.b64encode(f.read()).decode()
 else:
     st.warning(f"Beep file '{BEEP_FILE}' not found. Using default beep.")
-    # Default short beep (~0.5s sine wave) Base64
     beep_base64 = (
         "UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA////"
         "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
@@ -59,7 +58,6 @@ else:
 # JS beep function (3 repeated beeps)
 # ==========================
 def trigger_alarm(task_name):
-    """Play beep 3 times for desktop and mobile"""
     components.html(f"""
     <audio id="alarm" autoplay>
         <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
@@ -99,7 +97,8 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
         "color": color,
         "pause_key": pause_key,
         "scheduled_datetime": scheduled_datetime,
-        "alarm_played": False
+        "alarm_played": False,          # Desktop autoplay
+        "alarm_played_manual": False    # Mobile manual trigger
     }
 
 def display_task(task, key):
@@ -123,7 +122,6 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # --- Show PAUSE/RESUME ONLY for RUNNING tasks ---
     if status == "Running":
         pause_key = task["pause_key"]
         task["paused"] = st.checkbox("Pause/Resume", key=pause_key)
@@ -146,7 +144,6 @@ def update_tasks():
                 if not task.get("alarm_played", False):
                     trigger_alarm(task["name"])
                     task["alarm_played"] = True
-                # Auto-remove task after AUTO_CLEAR_SECONDS
                 threading.Timer(AUTO_CLEAR_SECONDS, lambda k=key: st.session_state.active_tasks.pop(k, None)).start()
 
 # ==========================
@@ -155,10 +152,13 @@ def update_tasks():
 st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB CookClock 🥘🍚🍖</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
-# --- Test Beep Button for Mobile Interaction ---
-st.subheader("🔊 Test Beep (Tap if mobile sound not working)")
-if st.button("Test Beep"):
-    trigger_alarm("Test")
+# --- Mobile-friendly Manual Beep Trigger ---
+st.subheader("🔔 Play Beeps for Completed Tasks (Tap on Mobile)")
+if st.button("Play Beeps for Finished Tasks"):
+    for key, task in st.session_state.active_tasks.items():
+        if task["status"] == "Done" and not task.get("alarm_played_manual", False):
+            trigger_alarm(task["name"])
+            task["alarm_played_manual"] = True
 
 # Predefined Tasks
 st.subheader("🔥 Predefined Tasks")
@@ -204,7 +204,7 @@ st.subheader("📅 Upcoming Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] == "Scheduled":
         task["color"] = TASK_COLORS["Upcoming"]
-        task["paused"] = False  # ensure no checkbox
+        task["paused"] = False
         display_task(task, key)
 
 # ==========================
@@ -214,5 +214,5 @@ update_tasks()
 
 st.subheader("⏱️ Active Tasks")
 for key, task in st.session_state.active_tasks.items():
-    if task["status"] != "Scheduled":  # only Running or Done
+    if task["status"] != "Scheduled":
         display_task(task, key)
