@@ -50,7 +50,7 @@ def trigger_alarm(task_name):
         var g = context.createGain();
         o.type = 'sine';
         o.frequency.setValueAtTime(440, context.currentTime);
-        g.gain.setValueAtTime(1, context.currentTime);  // volume (1=max)
+        g.gain.setValueAtTime(1, context.currentTime);  // volume
         o.connect(g);
         g.connect(context.destination);
         o.start(time);
@@ -113,7 +113,7 @@ def display_task(task, key):
     </div>
     """, unsafe_allow_html=True)
 
-    # --- ONLY SHOW PAUSE/RESUME FOR RUNNING TASKS ---
+    # --- Show PAUSE/RESUME ONLY for RUNNING tasks ---
     if status == "Running":
         pause_key = task["pause_key"]
         task["paused"] = st.checkbox("Pause/Resume", key=pause_key)
@@ -184,15 +184,15 @@ with st.form("scheduled_task_form"):
 
 st.markdown("---")
 
-# Upcoming Tasks Section
+# Upcoming Tasks Section (Scheduled only)
 st.subheader("📅 Upcoming Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] == "Scheduled":
         task["color"] = TASK_COLORS["Upcoming"]
-        display_task(task, key)
+        display_task(task, key)  # Only info, no pause/resume
 
 # ==========================
-# Update all tasks once per refresh
+# Update all tasks and display Running/Done tasks with Pause/Resume
 # ==========================
 update_tasks()
 for key, task in st.session_state.active_tasks.items():
