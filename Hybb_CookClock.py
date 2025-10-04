@@ -40,21 +40,26 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# Prepare local beep-01a.wav as Base64
+# Beep setup: local file or fallback Base64
 # ==========================
 BEEP_FILE = "beep-01a.wav"
-if not os.path.exists(BEEP_FILE):
-    st.error(f"Beep file '{BEEP_FILE}' not found in project folder!")
-    st.stop()
 
-with open(BEEP_FILE, "rb") as f:
-    beep_base64 = base64.b64encode(f.read()).decode()
+if os.path.exists(BEEP_FILE):
+    with open(BEEP_FILE, "rb") as f:
+        beep_base64 = base64.b64encode(f.read()).decode()
+else:
+    st.warning(f"Beep file '{BEEP_FILE}' not found. Using default beep.")
+    # Default short beep (~0.5s sine wave) Base64
+    beep_base64 = (
+        "UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA////"
+        "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
+    )
 
 # ==========================
 # JS beep function (3 repeated beeps)
 # ==========================
 def trigger_alarm(task_name):
-    """Play local beep-01a.wav 3 times for desktop and mobile"""
+    """Play beep 3 times for desktop and mobile"""
     components.html(f"""
     <audio id="alarm" autoplay>
         <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
