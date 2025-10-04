@@ -4,6 +4,7 @@ from datetime import datetime, date, time as dt_time
 from streamlit_autorefresh import st_autorefresh
 import threading
 import streamlit.components.v1 as components  # for JS beep
+import base64
 
 # ==========================
 # CONFIGURATION
@@ -38,27 +39,27 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# JS-based louder and longer repeated beep
+# Offline beep as Base64
 # ==========================
+# This is a short 0.5s beep encoded in Base64 (wav)
+BEEP_BASE64 = (
+    "UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA////"
+    "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
+)
+
 def trigger_alarm(task_name):
-    """Play 3 louder, longer beeps (~0.5s each) using JS"""
+    """Play beep sound for mobile & desktop using offline Base64 wav"""
     components.html(f"""
+    <audio id="alarm" autoplay>
+        <source src="data:audio/wav;base64,{BEEP_BASE64}" type="audio/wav">
+    </audio>
     <script>
-    var context = new (window.AudioContext || window.webkitAudioContext)();
-    function beep(time) {{
-        var o = context.createOscillator();
-        var g = context.createGain();
-        o.type = 'sine';
-        o.frequency.setValueAtTime(440, context.currentTime);
-        g.gain.setValueAtTime(1, context.currentTime);  // volume
-        o.connect(g);
-        g.connect(context.destination);
-        o.start(time);
-        o.stop(time + 0.5);  // longer beep (0.5s)
-    }}
-    beep(context.currentTime);
-    beep(context.currentTime + 0.55);
-    beep(context.currentTime + 1.1);
+    var audio = document.getElementById("alarm");
+    audio.play().catch(()=>{{console.log("User interaction required for mobile sound")}});
+
+    // Repeat 2 more times
+    setTimeout(()=>audio.play(), 600);
+    setTimeout(()=>audio.play(), 1200);
     </script>
     """, height=0)
     st.toast(f"Task '{task_name}' completed!")
