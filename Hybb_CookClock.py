@@ -38,24 +38,27 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# JS-based repeated beep
+# JS-based louder and longer repeated beep
 # ==========================
 def trigger_alarm(task_name):
-    """Play 3 short beeps (440 Hz, 0.3s each) using JS"""
+    """Play 3 louder, longer beeps (~0.5s each) using JS"""
     components.html(f"""
     <script>
     var context = new (window.AudioContext || window.webkitAudioContext)();
     function beep(time) {{
         var o = context.createOscillator();
+        var g = context.createGain();
         o.type = 'sine';
         o.frequency.setValueAtTime(440, context.currentTime);
-        o.connect(context.destination);
+        g.gain.setValueAtTime(1, context.currentTime);  // volume (1=max)
+        o.connect(g);
+        g.connect(context.destination);
         o.start(time);
-        o.stop(time + 0.3);
+        o.stop(time + 0.5);  // longer beep (0.5s)
     }}
     beep(context.currentTime);
-    beep(context.currentTime + 0.35);
-    beep(context.currentTime + 0.7);
+    beep(context.currentTime + 0.55);
+    beep(context.currentTime + 1.1);
     </script>
     """, height=0)
     st.toast(f"Task '{task_name}' completed!")
