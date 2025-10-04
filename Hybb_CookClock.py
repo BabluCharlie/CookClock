@@ -153,52 +153,12 @@ st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB Coo
 st.markdown("---")
 
 # --- Mobile-friendly Manual Beep Trigger ---
-# Check if there are any completed tasks
-completed_tasks_exist = any(
-    t["status"] == "Done" and not t.get("alarm_played_manual", False)
-    for t in st.session_state.active_tasks.values()
-)
-
-# Flashing button style for mobile attention
-if completed_tasks_exist:
-    button_html = """
-    <div style='text-align:center; margin:15px;'>
-        <button onclick="document.querySelector('#stButtonPlayBeep button').click()" 
-                style='font-size:30px; padding:20px; background-color:#ff4b4b; color:white;
-                       border-radius:15px; border:2px solid #d60000; animation: flash 1s infinite;'>
-            🔔 Play Beeps for Finished Tasks 🔔
-        </button>
-    </div>
-    <style>
-    @keyframes flash {
-        0% {background-color: #ff4b4b;}
-        50% {background-color: #ff9999;}
-        100% {background-color: #ff4b4b;}
-    }
-    </style>
-    """
-else:
-    button_html = """
-    <div style='text-align:center; margin:15px;'>
-        <button onclick="document.querySelector('#stButtonPlayBeep button').click()" 
-                style='font-size:25px; padding:15px; background-color:#ff9999; color:white;
-                       border-radius:15px; border:2px solid #d60000;'>
-            🔔 Play Beeps for Finished Tasks 🔔
-        </button>
-    </div>
-    """
-
-# Dummy Streamlit button to link with HTML button
-st.button("Play Finished Task Beeps", key="PlayBeep")
-components.html(button_html, height=100)
-
-# On button click, trigger beeps for all finished tasks
-if st.session_state.get("PlayBeep"):
+st.subheader("🔔 Play Beeps for Completed Tasks (Tap on Mobile)")
+if st.button("Play Beeps for Finished Tasks"):
     for key, task in st.session_state.active_tasks.items():
         if task["status"] == "Done" and not task.get("alarm_played_manual", False):
             trigger_alarm(task["name"])
             task["alarm_played_manual"] = True
-    st.session_state["PlayBeep"] = False  # reset
 
 # Predefined Tasks
 st.subheader("🔥 Predefined Tasks")
