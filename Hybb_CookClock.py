@@ -189,11 +189,15 @@ st.subheader("📅 Upcoming Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] == "Scheduled":
         task["color"] = TASK_COLORS["Upcoming"]
-        display_task(task, key)  # Only info, no pause/resume
+        task["paused"] = False  # ensure no checkbox
+        display_task(task, key)
 
 # ==========================
-# Update all tasks and display Running/Done tasks with Pause/Resume
+# Update all tasks and display Running/Done tasks
 # ==========================
 update_tasks()
+
+st.subheader("⏱️ Active Tasks")
 for key, task in st.session_state.active_tasks.items():
-    display_task(task, key)
+    if task["status"] != "Scheduled":  # only Running or Done
+        display_task(task, key)
