@@ -5,6 +5,7 @@ from streamlit_autorefresh import st_autorefresh
 import threading
 import streamlit.components.v1 as components  # for JS beep
 import base64
+import os
 
 # ==========================
 # CONFIGURATION
@@ -39,25 +40,28 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# Offline beep as Base64
+# Prepare local beep-01a.wav as Base64
 # ==========================
-# This is a short 0.5s beep encoded in Base64 (wav)
-BEEP_BASE64 = (
-    "UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA////"
-    "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
-)
+BEEP_FILE = "beep-01a.wav"
+if not os.path.exists(BEEP_FILE):
+    st.error(f"Beep file '{BEEP_FILE}' not found in project folder!")
+    st.stop()
 
+with open(BEEP_FILE, "rb") as f:
+    beep_base64 = base64.b64encode(f.read()).decode()
+
+# ==========================
+# JS beep function (3 repeated beeps)
+# ==========================
 def trigger_alarm(task_name):
-    """Play beep sound for mobile & desktop using offline Base64 wav"""
+    """Play local beep-01a.wav 3 times for desktop and mobile"""
     components.html(f"""
     <audio id="alarm" autoplay>
-        <source src="data:audio/wav;base64,{BEEP_BASE64}" type="audio/wav">
+        <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
     </audio>
     <script>
     var audio = document.getElementById("alarm");
-    audio.play().catch(()=>{{console.log("User interaction required for mobile sound")}});
-
-    // Repeat 2 more times
+    audio.play().catch(()=>{{console.log("User interaction required on mobile")}});
     setTimeout(()=>audio.play(), 600);
     setTimeout(()=>audio.play(), 1200);
     </script>
