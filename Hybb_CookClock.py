@@ -3,7 +3,6 @@ import time
 from datetime import datetime, date, time as dt_time
 from streamlit_autorefresh import st_autorefresh
 import threading
-import streamlit.components.v1 as components
 import base64
 import os
 
@@ -153,7 +152,7 @@ persistent_audio_html = f"""
 </script>
 """
 
-components.html(persistent_audio_html, height=120, key="hybb_audio_player", scrolling=False)
+st.markdown(persistent_audio_html, unsafe_allow_html=True)
 
 # ==========================
 # Trigger beep function
@@ -161,7 +160,7 @@ components.html(persistent_audio_html, height=120, key="hybb_audio_player", scro
 def trigger_alarm(task_name):
     st.toast(f"Task '{task_name}' completed!")
     # Signal persistent iframe
-    components.html(
+    st.markdown(
         """
         <script>
         try {
@@ -171,10 +170,10 @@ def trigger_alarm(task_name):
         }
         </script>
         """,
-        height=0,
+        unsafe_allow_html=True,
     )
     # Fallback manual button
-    components.html(f"""
+    st.markdown(f"""
     <div style='text-align:center; margin-top:10px;'>
         <button onclick="document.getElementById('alarm_fallback').play();" 
             style="background-color:#ff4444;color:white;font-size:20px;
@@ -193,7 +192,7 @@ def trigger_alarm(task_name):
       100% {{ background-color:#ff4444; }}
     }}
     </style>
-    """, height=110)
+    """, unsafe_allow_html=True)
 
 # ==========================
 # Helper functions
