@@ -3,8 +3,8 @@ import time
 from datetime import datetime, date, time as dt_time
 from streamlit_autorefresh import st_autorefresh
 import threading
-import base64
 import os
+import base64
 
 # ==========================
 # CONFIGURATION
@@ -39,160 +39,35 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# Beep setup: local file or fallback Base64
+# Reliable mobile-friendly sound
 # ==========================
-BEEP_FILE = "beep-01a.wav"
+# Base64 fallback ping sound
+fallback_sound_base64 = (
+    "UklGRjQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA////"
+    "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
+)
 
-if os.path.exists(BEEP_FILE):
-    with open(BEEP_FILE, "rb") as f:
-        beep_base64 = base64.b64encode(f.read()).decode()
-else:
-    st.warning(f"Beep file '{BEEP_FILE}' not found. Using default beep.")
-    beep_base64 = (
-        "UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA////"
-        "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
-    )
-
-# ==========================
-# Persistent audio iframe for mobile-friendly beep
-# ==========================
-persistent_audio_html = f"""
-<div id="hybb_audio_container" style="display:flex;flex-direction:column;align-items:center;">
-  <button id="hybb_enable_btn" style="padding:10px 18px;border-radius:8px;
-         background:#27ae60;color:white;border:none;font-weight:700;cursor:pointer;">
-    🔊 Enable Sound (Tap Once)
-  </button>
-  <div id="hybb_status" style="margin-top:6px;font-weight:700;color:#b22222;">
-    (Tap to enable sound for mobile)
-  </div>
-</div>
-
+# Hidden audio element and JS function
+st.markdown(f"""
 <audio id="hybb_audio" preload="auto">
-  <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
+    <source src="data:audio/wav;base64,{fallback_sound_base64}" type="audio/wav">
 </audio>
-
 <script>
-(function() {{
-  const btn = document.getElementById('hybb_enable_btn');
-  const status = document.getElementById('hybb_status');
-  const audioEl = document.getElementById('hybb_audio');
-
-  let ctx = null;
-  function unlockAudioContext() {{
-    try {{
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g);
-      g.connect(ctx.destination);
-      g.gain.value = 0;
-      o.start(0);
-      o.stop(0);
-      status.innerText = "✅ Sound enabled";
-      status.style.color = "green";
-    }} catch (e) {{
-      status.innerText = "⚠️ Sound may still be blocked on this browser";
-      status.style.color = "orange";
-      console.log('unlock error', e);
-    }}
-  }}
-
-  btn.addEventListener('click', function() {{
-    audioEl.play().then(() => {{
-      unlockAudioContext();
-    }}).catch((err) => {{
-      unlockAudioContext();
-    }});
-  }});
-
-  function playBeep() {{
-    try {{
-      if (ctx) {{
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.type = 'sine';
-        o.frequency.setValueAtTime(880, ctx.currentTime);
-        g.gain.setValueAtTime(0.2, ctx.currentTime);
-        o.connect(g);
-        g.connect(ctx.destination);
-        o.start();
-        o.stop(ctx.currentTime + 0.35);
-        setTimeout(function(){{ 
-          const o2 = ctx.createOscillator(), g2 = ctx.createGain();
-          o2.type='sine'; o2.frequency.setValueAtTime(880, ctx.currentTime);
-          g2.gain.setValueAtTime(0.2, ctx.currentTime);
-          o2.connect(g2); g2.connect(ctx.destination);
-          o2.start(); o2.stop(ctx.currentTime + 0.35);
-        }}, 450);
-      }} else {{
+    window.playHybbSound = function() {{
+        const audioEl = document.getElementById('hybb_audio');
         audioEl.currentTime = 0;
-        audioEl.play().catch(function(e){{ console.log('play fallback failed', e); }});
-        setTimeout(function(){{ audioEl.currentTime = 0; audioEl.play().catch(function(){{}}); }}, 600);
-        setTimeout(function(){{ audioEl.currentTime = 0; audioEl.play().catch(function(){{}}); }}, 1200);
-      }}
-    }} catch (err) {{
-      console.log('playBeep error', err);
+        audioEl.play().catch(()=>{{console.log('User interaction required to play sound')}});
     }}
-  }}
-
-  window.addEventListener('storage', function(e) {{
-    if (e.key === 'hybb_play_beep') {{
-      playBeep();
-    }}
-  }});
-
-  window.addEventListener('message', function(ev) {{
-    if (ev.data && ev.data.type === 'hybb_play_beep') {{
-      playBeep();
-    }}
-  }});
-
-  window.playBeepNow = playBeep;
-}})();
 </script>
-"""
-
-st.markdown(persistent_audio_html, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ==========================
-# Trigger beep function
+# Trigger alarm function
 # ==========================
 def trigger_alarm(task_name):
     st.toast(f"Task '{task_name}' completed!")
-    # Signal persistent iframe
-    st.markdown(
-        """
-        <script>
-        try {
-            localStorage.setItem('hybb_play_beep', Date.now().toString());
-        } catch(e) {
-            console.log('localStorage write failed', e);
-        }
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-    # Fallback manual button
-    st.markdown(f"""
-    <div style='text-align:center; margin-top:10px;'>
-        <button onclick="document.getElementById('alarm_fallback').play();" 
-            style="background-color:#ff4444;color:white;font-size:20px;
-                   padding:12px 24px;border:none;border-radius:10px;cursor:pointer;
-                   animation: flash 1s infinite;">
-            🔔 Play Sound for {task_name}
-        </button>
-    </div>
-    <audio id="alarm_fallback">
-        <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
-    </audio>
-    <style>
-    @keyframes flash {{
-      0% {{ background-color:#ff4444; }}
-      50% {{ background-color:#ffbb33; }}
-      100% {{ background-color:#ff4444; }}
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+    # Play the audio
+    st.markdown("<script>window.playHybbSound();</script>", unsafe_allow_html=True)
 
 # ==========================
 # Helper functions
@@ -268,6 +143,7 @@ def update_tasks():
 st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB CookClock 🥘🍚🍖</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
+# Manual beep button for mobile
 st.subheader("🔔 Play Beeps for Completed Tasks (Tap on Mobile)")
 if st.button("Play Beeps for Finished Tasks"):
     for key, task in st.session_state.active_tasks.items():
@@ -275,6 +151,7 @@ if st.button("Play Beeps for Finished Tasks"):
             trigger_alarm(task["name"])
             task["alarm_played_manual"] = True
 
+# Predefined Tasks
 st.subheader("🔥 Predefined Tasks")
 cols = st.columns(len(predefined_tasks))
 for i, (task_name, duration) in enumerate(predefined_tasks.items()):
@@ -284,6 +161,7 @@ for i, (task_name, duration) in enumerate(predefined_tasks.items()):
 
 st.markdown("---")
 
+# Custom Task
 st.subheader("✨ Add Custom Task (Immediate)")
 with st.form("custom_task_form"):
     custom_name = st.text_input("Task Name")
@@ -296,6 +174,7 @@ with st.form("custom_task_form"):
 
 st.markdown("---")
 
+# Scheduled Custom Task
 st.subheader("⏰ Schedule Task for Future")
 with st.form("scheduled_task_form"):
     sched_name = st.text_input("Task Name (Scheduled)")
@@ -311,6 +190,7 @@ with st.form("scheduled_task_form"):
 
 st.markdown("---")
 
+# Upcoming Tasks
 st.subheader("📅 Upcoming Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] == "Scheduled":
@@ -318,8 +198,10 @@ for key, task in st.session_state.active_tasks.items():
         task["paused"] = False
         display_task(task, key)
 
+# Update all tasks
 update_tasks()
 
+# Active Tasks
 st.subheader("⏱️ Active Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] != "Scheduled":
