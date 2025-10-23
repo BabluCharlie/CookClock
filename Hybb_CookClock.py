@@ -3,7 +3,6 @@ import time
 from datetime import datetime, date, time as dt_time
 from streamlit_autorefresh import st_autorefresh
 import threading
-import os
 import base64
 
 # ==========================
@@ -39,34 +38,42 @@ if "active_tasks" not in st.session_state:
 st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# Reliable mobile-friendly sound
+# Mobile-friendly sound setup
 # ==========================
-# Base64 fallback ping sound
 fallback_sound_base64 = (
     "UklGRjQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA////"
     "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
 )
 
-# Hidden audio element and JS function
 st.markdown(f"""
 <audio id="hybb_audio" preload="auto">
     <source src="data:audio/wav;base64,{fallback_sound_base64}" type="audio/wav">
 </audio>
 <script>
-    window.playHybbSound = function() {{
-        const audioEl = document.getElementById('hybb_audio');
-        audioEl.currentTime = 0;
-        audioEl.play().catch(()=>{{console.log('User interaction required to play sound')}});
+    window.audioUnlocked = false;
+    const audioEl = document.getElementById('hybb_audio');
+    function unlockAudio() {{
+        if(!window.audioUnlocked) {{
+            audioEl.play().then(()=>{{audioEl.pause(); audioEl.currentTime = 0;}});
+            window.audioUnlocked = true;
+            console.log('Audio unlocked for mobile!');
+        }}
     }}
+    window.playHybbSound = function() {{
+        if(window.audioUnlocked){{
+            audioEl.currentTime = 0;
+            audioEl.play().catch(()=>{{console.log('Audio playback failed')}});
+        }}
+    }}
+    document.addEventListener('click', unlockAudio, {{once:true}});
 </script>
 """, unsafe_allow_html=True)
 
 # ==========================
-# Trigger alarm function
+# Trigger alarm
 # ==========================
 def trigger_alarm(task_name):
     st.toast(f"Task '{task_name}' completed!")
-    # Play the audio
     st.markdown("<script>window.playHybbSound();</script>", unsafe_allow_html=True)
 
 # ==========================
@@ -93,8 +100,7 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
         "color": color,
         "pause_key": pause_key,
         "scheduled_datetime": scheduled_datetime,
-        "alarm_played": False,
-        "alarm_played_manual": False
+        "alarm_played": False
     }
 
 def display_task(task, key):
@@ -142,14 +148,6 @@ def update_tasks():
 # ==========================
 st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB CookClock 🥘🍚🍖</h1>", unsafe_allow_html=True)
 st.markdown("---")
-
-# Manual beep button for mobile
-st.subheader("🔔 Play Beeps for Completed Tasks (Tap on Mobile)")
-if st.button("Play Beeps for Finished Tasks"):
-    for key, task in st.session_state.active_tasks.items():
-        if task["status"] == "Done" and not task.get("alarm_played_manual", False):
-            trigger_alarm(task["name"])
-            task["alarm_played_manual"] = True
 
 # Predefined Tasks
 st.subheader("🔥 Predefined Tasks")
