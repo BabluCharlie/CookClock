@@ -1,155 +1,229 @@
 import streamlit as st
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, date, time as dt_time
+from streamlit_autorefresh import st_autorefresh
 import threading
 import streamlit.components.v1 as components
+import base64
+import os
 
 # ==========================
-# PAGE CONFIG
+# CONFIGURATION
 # ==========================
-st.set_page_config(page_title="HYBB CookClock", page_icon="🍳", layout="centered")
+st.set_page_config(page_title="HYBB CookClock", layout="wide")
+AUTO_CLEAR_SECONDS = 15  # Auto-remove done tasks
+
+# Predefined tasks (seconds)
+predefined_tasks = {
+    "Kebab Frying": 90,
+    "Rice Cooking": 25 * 60,
+    "Test 1": 10,
+    "Water Motor": 30 * 60
+}
+
+# Task colors
+TASK_COLORS = {
+    "Kebab Frying": "#e67e22",
+    "Rice Cooking": "#3498db",
+    "Test 1": "#f1c40f",
+    "Water Motor": "#1abc9c",
+    "Custom": "#9b59b6",
+    "Scheduled": "#f39c12",
+    "Upcoming": "#d35400"
+}
+
+# Store active tasks
+if "active_tasks" not in st.session_state:
+    st.session_state.active_tasks = {}
+
+# Auto-refresh for timer updates
+st_autorefresh(interval=1000, key="timer_refresh")
 
 # ==========================
-# TITLE AND STYLE
+# Beep setup: local file or fallback Base64
 # ==========================
-st.markdown(
-    """
+BEEP_FILE = "beep-01a.wav"
+
+if os.path.exists(BEEP_FILE):
+    with open(BEEP_FILE, "rb") as f:
+        beep_base64 = base64.b64encode(f.read()).decode()
+else:
+    st.warning(f"Beep file '{BEEP_FILE}' not found. Using default beep.")
+    beep_base64 = (
+        "UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA////"
+        "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
+    )
+
+# ==========================
+# JS beep function (3 repeated beeps)
+# ==========================
+def trigger_alarm(task_name):
+    st.toast(f"Task '{task_name}' completed!")
+
+    # Desktop autoplay works, mobile shows button if blocked
+    components.html(f"""
+    <div style='text-align:center; margin-top:10px;'>
+        <button onclick="document.getElementById('alarm').play();" 
+            style="background-color:#ff4444;color:white;font-size:20px;
+                   padding:12px 24px;border:none;border-radius:10px;cursor:pointer;
+                   animation: flash 1s infinite;">
+            🔔 Play Sound for {task_name}
+        </button>
+    </div>
+    <audio id="alarm" autoplay>
+        <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
+    </audio>
     <style>
-    .main {background-color: #fff8f0;}
-    .stButton>button {
-        border-radius: 12px;
-        padding: 10px 20px;
-        font-size: 16px;
-        font-weight: 600;
-        background-color: #faae42;
-        color: black;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #f9c76f;
-        color: black;
-    }
-    .flashing {
-        animation: flash 1s infinite;
-    }
-    @keyframes flash {
-        0% {background-color: #f87171;}
-        50% {background-color: #22c55e;}
-        100% {background-color: #f87171;}
-    }
+    @keyframes flash {{
+      0% {{ background-color:#ff4444; }}
+      50% {{ background-color:#ffbb33; }}
+      100% {{ background-color:#ff4444; }}
+    }}
     </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.title("🍳 HYBB CookClock Timer")
+    """, height=100)
 
 # ==========================
-# SOUND UNLOCK SECTION
+# Helper functions
 # ==========================
+def format_time(seconds):
+    mins, secs = divmod(int(seconds), 60)
+    return f"{mins:02d}:{secs:02d}"
 
-# JS block for unlocking sound (mobile browsers require user interaction)
-sound_unlock_html = """
-<script>
-let soundEnabled = false;
-function unlockSound() {
-  const context = new (window.AudioContext || window.webkitAudioContext)();
-  const oscillator = context.createOscillator();
-  oscillator.connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.1);
-  soundEnabled = true;
-  const msg = document.getElementById("soundStatus");
-  msg.innerText = "✅ Sound Enabled! You’ll now hear alerts.";
-  msg.style.color = "green";
-}
-</script>
-<div style="text-align:center;">
-  <button onclick="unlockSound()" class="flashing" 
-    style="font-size:18px;padding:12px 24px;border:none;border-radius:12px;color:white;">
-    🔊 Enable Sound for Alarms
-  </button>
-  <p id="soundStatus" style="font-weight:600;color:red;">(Tap the button above to enable sound)</p>
-</div>
-"""
+def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
+    key = f"{task_name}_{len(st.session_state.active_tasks)}"
+    placeholder = st.empty()
+    color = TASK_COLORS.get(task_type, TASK_COLORS["Custom"])
 
-components.html(sound_unlock_html, height=160)
+    status = "Scheduled" if scheduled_datetime and scheduled_datetime > datetime.now() else "Running"
+    pause_key = f"pause_{key}"
+    if pause_key not in st.session_state:
+        st.session_state[pause_key] = False
 
-# ==========================
-# BEEP FUNCTION (JS)
-# ==========================
-beep_js = """
-<script>
-function playBeep() {
-    try {
-        const context = new (window.AudioContext || window.webkitAudioContext)();
-        const o = context.createOscillator();
-        const g = context.createGain();
-        o.connect(g);
-        g.connect(context.destination);
-        o.type = "sine";
-        o.frequency.setValueAtTime(880, context.currentTime);
-        g.gain.setValueAtTime(0.2, context.currentTime);
-        o.start();
-        o.stop(context.currentTime + 0.5);
-    } catch (e) {
-        console.log("Sound blocked:", e);
-    }
-}
-</script>
-"""
-
-components.html(beep_js)
-
-def play_beep():
-    components.html("<script>playBeep();</script>", height=0)
-
-# ==========================
-# TIMER STORAGE
-# ==========================
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
-
-# ==========================
-# ADD NEW TIMER
-# ==========================
-with st.expander("➕ Add New Timer", expanded=True):
-    task_name = st.text_input("Task Name")
-    duration = st.number_input("Duration (seconds)", min_value=10, step=10)
-    add_btn = st.button("Start Timer")
-
-if add_btn and task_name:
-    end_time = datetime.now() + timedelta(seconds=duration)
-    st.session_state.tasks.append({
+    st.session_state.active_tasks[key] = {
         "name": task_name,
-        "end_time": end_time,
-        "done": False
-    })
-    st.success(f"⏳ Timer started for {task_name} ({duration}s)")
+        "duration": duration,
+        "remaining": duration,
+        "status": status,
+        "placeholder": placeholder,
+        "color": color,
+        "pause_key": pause_key,
+        "scheduled_datetime": scheduled_datetime,
+        "alarm_played": False,          # Desktop autoplay
+        "alarm_played_manual": False    # Mobile manual trigger
+    }
+
+def display_task(task, key):
+    sched_str = task["scheduled_datetime"].strftime("%Y-%m-%d %H:%M") if task.get("scheduled_datetime") else ""
+    status = task["status"]
+    color = "#28a745" if status == "Done" else task["color"]
+    percent = int((task["remaining"] / task["duration"]) * 100) if status == "Running" and task["duration"] > 0 else 0
+    remaining_str = format_time(task["remaining"]) if status != "Scheduled" else "--:--"
+
+    task["placeholder"].markdown(f"""
+    <div style='border:2px solid {color}; padding:20px; margin-bottom:15px; border-radius:15px;
+                background-color:#fef9f4; box-shadow: 4px 4px 12px #ccc;' >
+        <h1 style='margin:0; color:{color}; font-family:"Impact","Arial Black",sans-serif;
+                   font-weight:bold; font-size:48px; text-shadow: 2px 2px #ddd;'>{task['name']}</h1>
+        <p style='margin:5px 0; font-size:20px; font-weight:bold;'>Scheduled: {sched_str}</p>
+        <p style='margin:10px 0; font-size:24px; font-weight:bold;'>Remaining: {remaining_str}</p>
+        <div style='background-color:#eee; border-radius:12px; overflow:hidden; height:25px;' >
+            <div style='width:{percent}%; background-color:{color}; height:25px; transition: width 1s;'></div>
+        </div>
+        <p style='margin:10px 0; font-size:20px; font-weight:bold;'>Status: {status}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if status == "Running":
+        pause_key = task["pause_key"]
+        task["paused"] = st.checkbox("Pause/Resume", key=pause_key)
+    else:
+        task["paused"] = False
+
+def update_tasks():
+    now = datetime.now()
+    for key, task in list(st.session_state.active_tasks.items()):
+        # Activate scheduled tasks
+        if task["status"] == "Scheduled" and task.get("scheduled_datetime") and task["scheduled_datetime"] <= now:
+            task["status"] = "Running"
+
+        # Countdown for running tasks
+        if task["status"] == "Running" and not task.get("paused", False):
+            task["remaining"] -= 1
+            if task["remaining"] <= 0:
+                task["status"] = "Done"
+                task["remaining"] = 0
+                if not task.get("alarm_played", False):
+                    trigger_alarm(task["name"])
+                    task["alarm_played"] = True
+                threading.Timer(AUTO_CLEAR_SECONDS, lambda k=key: st.session_state.active_tasks.pop(k, None)).start()
 
 # ==========================
-# DISPLAY ACTIVE TIMERS
+# UI LAYOUT
 # ==========================
-st.subheader("⏱ Active Timers")
+st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB CookClock 🥘🍚🍖</h1>", unsafe_allow_html=True)
+st.markdown("---")
 
-active_found = False
-for i, task in enumerate(st.session_state.tasks):
-    if not task["done"]:
-        active_found = True
-        remaining = (task["end_time"] - datetime.now()).total_seconds()
-        if remaining <= 0:
-            st.error(f"✅ {task['name']} finished!")
-            play_beep()
-            st.session_state.tasks[i]["done"] = True
-        else:
-            mins, secs = divmod(int(remaining), 60)
-            st.info(f"{task['name']}: {mins:02d}:{secs:02d} remaining")
+# --- Mobile-friendly Manual Beep Trigger ---
+st.subheader("🔔 Play Beeps for Completed Tasks (Tap on Mobile)")
+if st.button("Play Beeps for Finished Tasks"):
+    for key, task in st.session_state.active_tasks.items():
+        if task["status"] == "Done" and not task.get("alarm_played_manual", False):
+            trigger_alarm(task["name"])
+            task["alarm_played_manual"] = True
 
-if not active_found:
-    st.write("No active timers.")
+# Predefined Tasks
+st.subheader("🔥 Predefined Tasks")
+cols = st.columns(len(predefined_tasks))
+for i, (task_name, duration) in enumerate(predefined_tasks.items()):
+    with cols[i]:
+        if st.button(f"Start {task_name}", key=f"start_{task_name}"):
+            start_task(task_name, duration, task_type=task_name)
+
+st.markdown("---")
+
+# Custom Task - immediate start
+st.subheader("✨ Add Custom Task (Immediate)")
+with st.form("custom_task_form"):
+    custom_name = st.text_input("Task Name")
+    custom_min = st.number_input("Minutes", min_value=0, value=0)
+    custom_sec = st.number_input("Seconds", min_value=0, value=30)
+    submitted = st.form_submit_button("Start Task")
+    if submitted:
+        duration = int(custom_min) * 60 + int(custom_sec)
+        start_task(custom_name, duration, task_type="Custom")
+
+st.markdown("---")
+
+# Scheduled Custom Task
+st.subheader("⏰ Schedule Task for Future")
+with st.form("scheduled_task_form"):
+    sched_name = st.text_input("Task Name (Scheduled)")
+    sched_date = st.date_input("Select Date", value=date.today())
+    sched_time = st.time_input("Select Time", value=dt_time(12, 0))
+    sched_min = st.number_input("Minutes", min_value=0, value=0, key="sched_min")
+    sched_sec = st.number_input("Seconds", min_value=0, value=30, key="sched_sec")
+    submitted_sched = st.form_submit_button("Schedule Task")
+    if submitted_sched:
+        duration = int(sched_min)*60 + int(sched_sec)
+        scheduled_datetime = datetime.combine(sched_date, sched_time)
+        start_task(sched_name, duration, task_type="Scheduled", scheduled_datetime=scheduled_datetime)
+
+st.markdown("---")
+
+# Upcoming Tasks Section (Scheduled only)
+st.subheader("📅 Upcoming Tasks")
+for key, task in st.session_state.active_tasks.items():
+    if task["status"] == "Scheduled":
+        task["color"] = TASK_COLORS["Upcoming"]
+        task["paused"] = False
+        display_task(task, key)
 
 # ==========================
-# REFRESH
+# Update all tasks and display Running/Done tasks
 # ==========================
-st_autorefresh = st.experimental_rerun
-time.sleep(1)
+update_tasks()
+
+st.subheader("⏱️ Active Tasks")
+for key, task in st.session_state.active_tasks.items():
+    if task["status"] != "Scheduled":
+        display_task(task, key)
