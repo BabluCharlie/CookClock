@@ -63,10 +63,14 @@ def trigger_alarm(task_name):
         <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
     </audio>
     <script>
-    var audio = document.getElementById("alarm");
-    audio.play().catch(()=>{{console.log("User interaction required on mobile")}});
-    setTimeout(()=>audio.play(), 600);
-    setTimeout(()=>audio.play(), 1200);
+    if (localStorage.getItem("soundEnabled") === "true") {{
+        var audio = document.getElementById("alarm");
+        audio.play().catch(()=>console.log("Autoplay blocked (no permission yet)"));
+        setTimeout(()=>audio.play(), 600);
+        setTimeout(()=>audio.play(), 1200);
+    }} else {{
+        console.log("Sound not enabled by user yet");
+    }}
     </script>
     """, height=0)
     st.toast(f"Task '{task_name}' completed!")
@@ -159,6 +163,34 @@ if st.button("Play Beeps for Finished Tasks"):
         if task["status"] == "Done" and not task.get("alarm_played_manual", False):
             trigger_alarm(task["name"])
             task["alarm_played_manual"] = True
+
+# ==========================
+# Mobile Sound Unlock (user must tap once)
+# ==========================
+st.markdown("### 🔊 Enable Sound on Mobile (Tap Once Before Using)")
+components.html(f"""
+<button id="enableSoundBtn" 
+    style="background-color:#27ae60;color:white;font-size:18px;
+           padding:10px 20px;border:none;border-radius:10px;cursor:pointer;">
+    🔊 Tap Here to Enable Sound
+</button>
+<audio id="unlockSound">
+  <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
+</audio>
+<script>
+document.getElementById("enableSoundBtn").addEventListener("click", function() {{
+    var sound = document.getElementById("unlockSound");
+    sound.play().then(() => {{
+        localStorage.setItem("soundEnabled", "true");
+        alert("✅ Sound enabled! Tasks will beep automatically now.");
+    }}).catch((err)=>{{
+        alert("⚠️ Unable to enable sound. Please allow audio playback in browser settings.");
+    }});
+}});
+</script>
+""", height=120)
+
+st.markdown("---")
 
 # Predefined Tasks
 st.subheader("🔥 Predefined Tasks")
