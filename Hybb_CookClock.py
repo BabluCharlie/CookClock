@@ -8,7 +8,7 @@ import threading
 # CONFIGURATION
 # ==========================
 st.set_page_config(page_title="HYBB CookClock", layout="wide")
-AUTO_CLEAR_SECONDS = 15  # Auto-remove done tasks
+AUTO_CLEAR_SECONDS = 15  # Auto-remove done tasks after X seconds
 
 # Predefined tasks
 predefined_tasks = {
@@ -41,7 +41,7 @@ beep_base64 = (
     "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
 )
 
-# Persistent audio element + JS helpers
+# Persistent audio element + JS helpers (escaped braces)
 st.markdown(f"""
 <audio id="beepAudio" preload="auto">
   <source src="data:audio/wav;base64,{beep_base64}" type="audio/wav">
@@ -51,7 +51,7 @@ st.markdown(f"""
 let beepUnlocked = false;
 const beepAudio = document.getElementById("beepAudio");
 
-// unlock on first user click (required on mobile)
+// Unlock audio on first user click (mobile browsers block autoplay)
 document.addEventListener("click", () => {{
   if (!beepUnlocked) {{
     beepAudio.play().then(() => {{
@@ -59,19 +59,21 @@ document.addEventListener("click", () => {{
       beepAudio.currentTime = 0;
       beepUnlocked = true;
       console.log("Beep unlocked ✅");
-    }}).catch(()=>{});
+    }}).catch(() => {{ }});
   }}
 }}, {{once:true}});
 
-// global function for Streamlit trigger
+// Global JS function Streamlit can call
 window.playBeep = function() {{
   beepAudio.currentTime = 0;
-  beepAudio.play().catch((e)=>{{console.log("Play blocked:", e);}});
+  beepAudio.play().catch((e) => {{
+    console.log("Play blocked:", e);
+  }});
 }};
 </script>
 """, unsafe_allow_html=True)
 
-# Manual beep button (always available)
+# Manual beep button (for mobile unlock or testing)
 st.markdown("""
 <div style="text-align:center; margin:10px;">
   <button onclick="window.playBeep()" 
@@ -91,9 +93,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================
-# FUNCTIONS
+# HELPER FUNCTIONS
 # ==========================
 def trigger_alarm(task_name):
+    """Play beep and show toast when a task completes"""
     st.toast(f"✅ Task '{task_name}' completed!")
     st.markdown("<script>window.playBeep();</script>", unsafe_allow_html=True)
 
@@ -102,6 +105,7 @@ def format_time(seconds):
     return f"{mins:02d}:{secs:02d}"
 
 def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None):
+    """Start or schedule a task"""
     key = f"{task_name}_{len(st.session_state.active_tasks)}"
     placeholder = st.empty()
     color = TASK_COLORS.get(task_type, TASK_COLORS["Custom"])
@@ -122,10 +126,11 @@ def start_task(task_name, duration, task_type="Custom", scheduled_datetime=None)
     }
 
 def display_task(task, key):
+    """Render a single task card"""
     sched_str = task["scheduled_datetime"].strftime("%Y-%m-%d %H:%M") if task.get("scheduled_datetime") else ""
     status = task["status"]
     color = "#28a745" if status == "Done" else task["color"]
-    percent = int((task["remaining"] / task["duration"]) * 100) if status == "Running" else 0
+    percent = int((task["remaining"] / task["duration"]) * 100) if status == "Running" and task["duration"] > 0 else 0
     remaining_str = format_time(task["remaining"]) if status != "Scheduled" else "--:--"
 
     task["placeholder"].markdown(f"""
@@ -148,6 +153,7 @@ def display_task(task, key):
         task["paused"] = False
 
 def update_tasks():
+    """Update timers and trigger alarms"""
     now = datetime.now()
     for key, task in list(st.session_state.active_tasks.items()):
         if task["status"] == "Scheduled" and task["scheduled_datetime"] <= now:
@@ -160,15 +166,16 @@ def update_tasks():
                 if not task["alarm_played"]:
                     trigger_alarm(task["name"])
                     task["alarm_played"] = True
+                # Auto-clear after a short delay
                 threading.Timer(AUTO_CLEAR_SECONDS, lambda k=key: st.session_state.active_tasks.pop(k, None)).start()
 
 # ==========================
-# UI
+# UI SECTION
 # ==========================
 st.markdown("<h1 style='text-align:center; color:#d35400;'>🍖🍚🥘 HYBB CookClock 🥘🍚🍖</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Predefined
+# --- Predefined Tasks ---
 st.subheader("🔥 Predefined Tasks")
 cols = st.columns(len(predefined_tasks))
 for i, (task_name, duration) in enumerate(predefined_tasks.items()):
@@ -178,44 +185,46 @@ for i, (task_name, duration) in enumerate(predefined_tasks.items()):
 
 st.markdown("---")
 
-# Custom
+# --- Custom Task (Immediate) ---
 st.subheader("✨ Add Custom Task (Immediate)")
 with st.form("custom_task_form"):
-    name = st.text_input("Task Name")
-    mins = st.number_input("Minutes", min_value=0, value=0)
-    secs = st.number_input("Seconds", min_value=0, value=30)
-    if st.form_submit_button("Start Task"):
-        duration = int(mins)*60 + int(secs)
-        start_task(name, duration)
+    custom_name = st.text_input("Task Name")
+    custom_min = st.number_input("Minutes", min_value=0, value=0)
+    custom_sec = st.number_input("Seconds", min_value=0, value=30)
+    submitted = st.form_submit_button("Start Task")
+    if submitted:
+        duration = int(custom_min) * 60 + int(custom_sec)
+        start_task(custom_name, duration, task_type="Custom")
 
 st.markdown("---")
 
-# Scheduled
+# --- Scheduled Task ---
 st.subheader("⏰ Schedule Task for Future")
 with st.form("scheduled_task_form"):
-    name = st.text_input("Task Name (Scheduled)")
+    sched_name = st.text_input("Task Name (Scheduled)")
     sched_date = st.date_input("Select Date", value=date.today())
     sched_time = st.time_input("Select Time", value=dt_time(12, 0))
-    mins = st.number_input("Minutes", min_value=0, value=0, key="s_mins")
-    secs = st.number_input("Seconds", min_value=0, value=30, key="s_secs")
-    if st.form_submit_button("Schedule Task"):
-        duration = int(mins)*60 + int(secs)
+    sched_min = st.number_input("Minutes", min_value=0, value=0, key="sched_min")
+    sched_sec = st.number_input("Seconds", min_value=0, value=30, key="sched_sec")
+    submitted_sched = st.form_submit_button("Schedule Task")
+    if submitted_sched:
+        duration = int(sched_min) * 60 + int(sched_sec)
         scheduled_datetime = datetime.combine(sched_date, sched_time)
-        start_task(name, duration, task_type="Scheduled", scheduled_datetime=scheduled_datetime)
+        start_task(sched_name, duration, task_type="Scheduled", scheduled_datetime=scheduled_datetime)
 
 st.markdown("---")
 
-# Upcoming
+# --- Upcoming Tasks ---
 st.subheader("📅 Upcoming Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] == "Scheduled":
         task["color"] = TASK_COLORS["Upcoming"]
         display_task(task, key)
 
-# Update all
+# Update all timers
 update_tasks()
 
-# Active
+# --- Active Tasks ---
 st.subheader("⏱️ Active Tasks")
 for key, task in st.session_state.active_tasks.items():
     if task["status"] != "Scheduled":
