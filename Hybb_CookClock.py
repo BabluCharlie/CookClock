@@ -46,7 +46,7 @@ if "tasks" not in st.session_state:
     st.session_state.tasks = {}
 
 task_options = {
-    "Kebab": 90,
+    "Kebab": 10,
     "Wings": 90,
     "Harabara Kebab": 180
 }
