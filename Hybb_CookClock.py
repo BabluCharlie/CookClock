@@ -37,13 +37,10 @@ if "active_tasks" not in st.session_state:
     st.session_state.active_tasks = {}
 
 # ==========================
-# SOUND SETUP
+# SOUND SETUP (VALID BASE64)
 # ==========================
-# Base64 beep WAV (works with st.audio)
-beep_base64 = (
-    "UklGRjQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA////"
-    "/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA/////wAA"
-)
+# Minimal valid beep WAV in base64
+beep_base64 = "UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
 beep_bytes = base64.b64decode(beep_base64)
 
 # Detect desktop vs mobile
@@ -60,15 +57,12 @@ def trigger_alarm(task_name):
     """Play sound for desktop, show button for mobile"""
     st.toast(f"✅ Task '{task_name}' completed!")
     if is_desktop:
-        # Desktop: auto-play sound
         try:
             from playsound import playsound
             threading.Thread(target=playsound, args=("beep.wav",), daemon=True).start()
         except:
-            # fallback to st.audio
             st.audio(io.BytesIO(beep_bytes))
     else:
-        # Mobile: user must click button
         st.markdown(f"""
         <div style="text-align:center; margin:10px;">
             <button onclick="document.getElementById('mobileBeep').play()"
